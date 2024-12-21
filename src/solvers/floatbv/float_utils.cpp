@@ -44,7 +44,7 @@ bvt float_utilst::from_signed_integer(const bvt &src)
       src.size()-1,
       address_bits(src.size() - 1) + 1);
 
-  return rounder(result);
+  return round_and_pack(result);
 }
 
 bvt float_utilst::from_unsigned_integer(const bvt &src)
@@ -61,7 +61,7 @@ bvt float_utilst::from_unsigned_integer(const bvt &src)
 
   result.sign=const_literal(false);
 
-  return rounder(result);
+  return round_and_pack(result);
 }
 
 bvt float_utilst::to_signed_integer(
@@ -149,6 +149,36 @@ bvt float_utilst::build_constant(const ieee_float_valuet &src)
   return pack(bias(result));
 }
 
+bvt float_utilst::round_to_integral(const bvt &src)
+{
+  PRECONDITION(src.size() == spec.width());
+
+  // Zero? NaN? Infinity?
+  auto unpacked = unpack(src);
+  auto is_special = prop.lor({unpacked.zero, unpacked.NaN, unpacked.infinity});
+
+  // add 2^f, where f is the number of fraction bits,
+  // by adding f to the exponent
+  auto magic_number = ieee_floatt{
+    spec, ieee_floatt::rounding_modet::ROUND_TO_ZERO, power(2, spec.f)};
+
+  auto magic_number_bv = build_constant(magic_number);
+
+  // abs(x) >= magic_number? If so, then there is no fractional part.
+  literalt ge_magic_number = relation(abs(src), relt::GE, magic_number_bv);
+
+  magic_number_bv.back() = src.back(); // copy sign bit
+
+  auto tmp1 = add_sub(src, magic_number_bv, false);
+
+  auto tmp2 = add_sub(tmp1, magic_number_bv, true);
+
+  // restore the original sign bit
+  tmp2.back() = src.back();
+
+  return bv_utils.select(prop.lor(is_special, ge_magic_number), src, tmp2);
+}
+
 bvt float_utilst::conversion(
   const bvt &src,
   const ieee_float_spect &dest_spec)
@@ -216,7 +246,7 @@ bvt float_utilst::conversion(
     // we actually need to round
     unbiased_floatt result=unpack(src);
     spec=dest_spec;
-    return rounder(result);
+    return round_and_pack(result);
   }
 }
 
@@ -382,7 +412,7 @@ bvt float_utilst::add_sub(
   return pack(bias(result));
   #endif
 
-  return rounder(result);
+  return round_and_pack(result);
 }
 
 /// Limits the shift distance
@@ -458,7 +488,7 @@ bvt float_utilst::mul(const bvt &src1, const bvt &src2)
     result.NaN=prop.lor(NaN_cond);
   }
 
-  return rounder(result);
+  return round_and_pack(result);
 }
 
 bvt float_utilst::div(const bvt &src1, const bvt &src2)
@@ -537,7 +567,7 @@ bvt float_utilst::div(const bvt &src1, const bvt &src2)
   result.fraction=bv_utils.select(force_zero,
     bv_utils.zeros(result.fraction.size()), result.fraction);
 
-  return rounder(result);
+  return round_and_pack(result);
 }
 
 bvt float_utilst::rem(const bvt &src1, const bvt &src2)
@@ -901,11 +931,11 @@ void float_utilst::denormalization_shift(bvt &fraction, bvt &exponent)
       exponent);
 }
 
-bvt float_utilst::rounder(const unbiased_floatt &src)
+float_utilst::unbiased_floatt float_utilst::rounder(const unbiased_floatt &src)
 {
   // incoming: some fraction (with explicit 1),
   //           some exponent without bias
-  // outgoing: rounded, with right size, with hidden bit, bias
+  // outgoing: rounded, with right size, but still unpacked
 
   bvt aligned_fraction=src.fraction,
       aligned_exponent=src.exponent;
@@ -936,7 +966,12 @@ bvt float_utilst::rounder(const unbiased_floatt &src)
   round_fraction(result);
   round_exponent(result);
 
-  return pack(bias(result));
+  return result;
+}
+
+bvt float_utilst::round_and_pack(const unbiased_floatt &src)
+{
+  return pack(bias(rounder(src)));
 }
 
 /// rounding decision for fraction using sticky bit
