@@ -39,6 +39,7 @@ void goto_check_c(
 
 #define OPT_GOTO_CHECK                                                         \
   "(bounds-check)(pointer-check)(memory-leak-check)(memory-cleanup-check)"     \
+  "(uninitialized-check)"                                                      \
   "(div-by-zero-check)(float-div-by-zero-check)"                               \
   "(enum-range-check)"                                                         \
   "(signed-overflow-check)(unsigned-overflow-check)"                           \
@@ -51,6 +52,7 @@ void goto_check_c(
   "(assert-to-assume)"                                                         \
   "(no-bounds-check)(no-pointer-check)(no-signed-overflow-check)"              \
   "(no-pointer-primitive-check)(no-undefined-shift-check)"                     \
+  "(no-uninitialized-check)"                                                   \
   "(no-div-by-zero-check)"
 
 // clang-format off
@@ -59,6 +61,8 @@ void goto_check_c(
   " {y--bounds-check} \t enable array bounds checks (default on)\n"            \
   " {y--no-bounds-check} \t disable array bounds checks\n"                     \
   " {y--pointer-check} \t enable pointer checks (default on)\n"                \
+  " {y--uninitialized-check} \t enable checks for uninitialized data (default off)\n" \
+  " {y--no-uninitialized-check} \t disable checks for uninitialized data\n"    \
   " {y--no-pointer-check} \t disable pointer checks\n"                         \
   " {y--memory-leak-check} \t enable memory leak checks\n"                     \
   " {y--memory-cleanup-check} \t enable memory cleanup checks\n"               \
@@ -126,6 +130,7 @@ void goto_check_c(
     options.set_option("error-label", cmdline.get_values("error-label"));      \
   PARSE_OPTION_OVERRIDE(cmdline, options, "bounds-check"); \
   PARSE_OPTION_OVERRIDE(cmdline, options, "pointer-check"); \
+  PARSE_OPTION_OVERRIDE(cmdline, options, "uninitialized-check"); \
   PARSE_OPTION_OVERRIDE(cmdline, options, "div-by-zero-check"); \
   PARSE_OPTION_OVERRIDE(cmdline, options, "float-div-by-zero-check"); \
   PARSE_OPTION_OVERRIDE(cmdline, options, "signed-overflow-check"); \

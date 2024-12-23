@@ -53,6 +53,8 @@ public:
   {
     enable_bounds_check = _options.get_bool_option("bounds-check");
     enable_pointer_check = _options.get_bool_option("pointer-check");
+    enable_uninitialized_check =
+      _options.get_bool_option("uninitialized-check");
     enable_memory_leak_check = _options.get_bool_option("memory-leak-check");
     enable_memory_cleanup_check =
       _options.get_bool_option("memory-cleanup-check");
@@ -189,6 +191,8 @@ protected:
   void undefined_shift_check(const shift_exprt &, const guardt &);
   void pointer_rel_check(const binary_exprt &, const guardt &);
   void pointer_overflow_check(const exprt &, const guardt &);
+  void
+  uninitialized_check(const symbol_exprt &, const guardt &, bool is_assigned);
   void memory_leak_check(const irep_idt &function_id);
 
   /// Generates VCCs for the validity of the given dereferencing operation.
@@ -265,6 +269,7 @@ protected:
 
   bool enable_bounds_check;
   bool enable_pointer_check;
+  bool enable_uninitialized_check;
   bool enable_memory_leak_check;
   bool enable_memory_cleanup_check;
   bool enable_div_by_zero_check;
@@ -286,6 +291,7 @@ protected:
   std::map<irep_idt, bool *> name_to_flag{
     {"bounds-check", &enable_bounds_check},
     {"pointer-check", &enable_pointer_check},
+    {"uninitialized-check", &enable_uninitialized_check},
     {"memory-leak-check", &enable_memory_leak_check},
     {"memory-cleanup-check", &enable_memory_cleanup_check},
     {"div-by-zero-check", &enable_div_by_zero_check},
@@ -1339,6 +1345,45 @@ void goto_check_ct::nan_check(const exprt &expr, const guardt &guard)
     guard);
 }
 
+void goto_check_ct::uninitialized_check(
+  const symbol_exprt &expr,
+  const guardt &guard,
+  bool is_assigned)
+{
+  if(!enable_uninitialized_check)
+    return;
+
+  // Ignore C function symbols.
+  if(expr.type().id() == ID_code)
+    return;
+
+  // Don't check the LHS of an assignment -- these do not
+  // have to be initialized
+  if(is_assigned)
+    return;
+
+  // Look up the symbol
+  auto &symbol = ns.lookup(expr);
+
+  // Anything with static lifetime is initialized by the runtime,
+  // and is hence never uninitialized.
+  if(symbol.is_static_lifetime)
+    return;
+
+  // Query our abstract domain whether this might be uninitialized use.
+  if(!local_bitvector_analysis->get(current_target, expr).is_uninitialized())
+    return; // not uninitialized
+
+  add_guarded_property(
+    false_exprt{},
+    "reading uninitialized local",
+    "uninitialized",
+    true, // not fatal
+    expr.find_source_location(),
+    expr,
+    guard);
+}
+
 void goto_check_ct::pointer_rel_check(
   const binary_exprt &expr,
   const guardt &guard)
@@ -2058,6 +2103,10 @@ void goto_check_ct::check_rec(
   else if(expr.id() == ID_dereference)
   {
     pointer_validity_check(to_dereference_expr(expr), expr, guard);
+  }
+  else if(expr.id() == ID_symbol)
+  {
+    uninitialized_check(to_symbol_expr(expr), guard, is_assigned);
   }
   else if(requires_pointer_primitive_check(expr))
   {
