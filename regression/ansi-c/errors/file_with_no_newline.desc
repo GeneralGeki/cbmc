@@ -1,0 +1,7 @@
+CORE
+file_with_no_newline.i
+
+^file file_with_no_newline\.i line 1 function syntax: .*$
+^EXIT=1$
+^SIGNAL=0$
+--
