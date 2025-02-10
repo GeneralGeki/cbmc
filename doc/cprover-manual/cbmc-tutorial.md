@@ -275,7 +275,7 @@ The `while` loop in the `main` function has no (useful) run-time bound.
 Thus, a bound has to be set on the amount of unwinding that CBMC
 performs. There are two ways to do so:
 
-1.  The `--unwind` command-line parameter can to be used to limit the
+1.  The `--unwind` command-line parameter can be used to limit the
     number of times loops are unwound.
 2.  The `--depth` command-line parameter can be used to limit the number
     of program steps to be processed.
